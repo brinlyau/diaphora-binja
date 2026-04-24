@@ -263,22 +263,31 @@ class CBinjaBinDiff(diaphora.CBinDiff):
   # ----------------------------------------------------------------------------
   # Helpers over a BN function / BV.
   # ----------------------------------------------------------------------------
+  def _arch_for(self, owner):
+    """Return the per-function/per-block arch, falling back to the BV's."""
+    arch = getattr(owner, "arch", None) if owner is not None else None
+    if arch is None:
+      arch = self.bv.arch if self.bv is not None else None
+    return arch
+
   def _iter_instruction_addrs(self, bb):
     """Yield every instruction address in a BN BasicBlock."""
     addr = bb.start
     end = bb.end
-    bv = self.bv
+    arch = self._arch_for(bb)
     while addr < end:
-      length = bv.get_instruction_length(addr)
-      if not length or length <= 0:
+      length = self._get_instruction_length(addr, arch=arch)
+      if length <= 0:
         break
       yield addr
       addr += length
 
-  def _get_instruction_text(self, addr):
+  def _get_instruction_text(self, addr, arch=None):
     """Return (mnemonic, full_disasm_string) for an instruction."""
+    if arch is None:
+      arch = self._arch_for(None)
     try:
-      tokens, _ = self.bv.arch.get_instruction_text(self.bv.read(addr, 16), addr)
+      tokens, _ = arch.get_instruction_text(self.bv.read(addr, 16), addr)
     except Exception:
       tokens = None
     if not tokens:
@@ -287,11 +296,19 @@ class CBinjaBinDiff(diaphora.CBinDiff):
     disasm = "".join(str(t) for t in tokens).strip()
     return mnem, disasm
 
-  def _get_instruction_length(self, addr):
+  def _get_instruction_length(self, addr, arch=None):
+    if arch is None:
+      arch = self._arch_for(None)
     try:
-      length = self.bv.get_instruction_length(addr)
+      info = arch.get_instruction_info(self.bv.read(addr, 16), addr) if arch is not None else None
+      length = info.length if info is not None else 0
     except Exception:
       length = 0
+    if not length:
+      try:
+        length = self.bv.get_instruction_length(addr)
+      except Exception:
+        length = 0
     return length or 1
 
   def _get_bytes(self, addr, length):
@@ -362,8 +379,9 @@ class CBinjaBinDiff(diaphora.CBinDiff):
     try:
       for func in self.bv.functions:
         for bb in func.basic_blocks:
+          arch = self._arch_for(bb)
           for addr in self._iter_instruction_addrs(bb):
-            mnem, _ = self._get_instruction_text(addr)
+            mnem, _ = self._get_instruction_text(addr, arch=arch)
             if mnem:
               mnems.add(mnem)
     except Exception:
@@ -773,9 +791,10 @@ class CBinjaBinDiff(diaphora.CBinDiff):
       bb_topological[idx] = []
       bb_topo_num[block_ea] = idx
 
+      block_arch = self._arch_for(block)
       for current_head in self._iter_instruction_addrs(block):
-        mnem, disasm = self._get_instruction_text(current_head)
-        ilen = self._get_instruction_length(current_head)
+        mnem, disasm = self._get_instruction_text(current_head, arch=block_arch)
+        ilen = self._get_instruction_length(current_head, arch=block_arch)
         size += ilen
         instructions += 1
 
