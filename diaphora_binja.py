@@ -1019,10 +1019,16 @@ class CBinjaBinDiff(diaphora.CBinDiff):
 
     function_flags = self._function_flags(func)
 
-    # HLIL -> pseudo primes + a cheap textual pseudocode
+    # HLIL -> pseudo primes + a cheap textual pseudocode.  Mirror IDA's
+    # extract_function_pseudocode_features: pseudocode_primes is only
+    # meaningful when a textual pseudocode was actually produced.  Without
+    # this gate every BN function whose HLIL is missing/empty stores the
+    # primes-hash sentinel ``"1"``, and Diaphora's matchers then treat all
+    # such functions as having identical AST primes, generating bogus
+    # equal-pseudocode matches across unrelated functions.
     pseudocode_primes_int, pseudo, pseudo_list = self.get_pseudocode_primes(func)
     pseudo_lines = len(pseudo_list) if pseudo_list else 0
-    pseudocode_primes = str(pseudocode_primes_int) if pseudocode_primes_int else None
+    pseudocode_primes = str(pseudocode_primes_int) if pseudo else None
     pseudo_hash1 = None
     pseudo_hash2 = None
     pseudo_hash3 = None
