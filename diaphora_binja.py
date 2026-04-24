@@ -483,26 +483,25 @@ class CBinjaBinDiff(diaphora.CBinDiff):
       hlil = None
     if hlil is None:
       return 1, None, []
+
+    # Walk the same set of instructions for both the primes hash and the
+    # textual pseudocode so the two stay in sync.  Iterating ``hlil.instructions``
+    # yields every leaf instruction; CHLILAstVisitor recurses into operands so
+    # the AST coverage matches what the textual representation reflects.
+    pseudo_lines = []
     visitor = CHLILAstVisitor()
     try:
-      root = getattr(hlil, "root", None)
-      if root is not None:
-        visitor.visit(root)
-      else:
-        for ins in hlil.instructions:
-          visitor.visit(ins)
-    except Exception:
-      pass
-
-    # A cheap textual pseudocode so pseudo/ pseudo_lines have a value.
-    pseudo_lines = []
-    try:
       for ins in hlil.instructions:
+        visitor.visit(ins)
         pseudo_lines.append(str(ins))
     except Exception:
       pass
 
-    return visitor.primes_hash, "\n".join(pseudo_lines) if pseudo_lines else None, pseudo_lines
+    return (
+      visitor.primes_hash,
+      "\n".join(pseudo_lines) if pseudo_lines else None,
+      pseudo_lines,
+    )
 
   # ----------------------------------------------------------------------------
   # Pure-math helpers copied verbatim from diaphora_ida.py.
