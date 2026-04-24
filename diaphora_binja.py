@@ -356,11 +356,20 @@ class CBinjaBinDiff(diaphora.CBinDiff):
     return callers
 
   def _extract_callees_and_refs(self, func, addr):
-    """Return (callee_func_starts_at_this_insn, data_ref_targets_at_this_insn)."""
+    """Return (callee_func_starts_at_this_insn,
+                data_ref_targets_at_this_insn,
+                code_ref_targets_at_this_insn).
+
+    The caller uses ``code_refs`` to look up names for call/jump targets so the
+    per-function ``names`` column gets the same coverage IDA's exporter does
+    (``call printf`` -> "printf" lands in ``names``).
+    """
     callees = []
     data_refs = []
+    code_refs = []
     try:
       for cref in self.bv.get_code_refs_from(addr):
+        code_refs.append(int(cref))
         cfunc = self.bv.get_functions_containing(cref)
         if cfunc:
           for cf in cfunc:
@@ -373,7 +382,7 @@ class CBinjaBinDiff(diaphora.CBinDiff):
         data_refs.append(int(dref))
     except Exception:
       pass
-    return callees, data_refs
+    return callees, data_refs, code_refs
 
   def _is_call_insn(self, func, addr):
     try:
@@ -641,7 +650,7 @@ class CBinjaBinDiff(diaphora.CBinDiff):
       for addr in self._iter_instruction_addrs(block):
         if self._is_call_insn(func, addr):
           h *= FEATURE_CALL
-        _, data_refs = self._extract_callees_and_refs(func, addr)
+        _, data_refs, _ = self._extract_callees_and_refs(func, addr)
         if data_refs:
           h *= FEATURE_DATA_REFS
         try:
@@ -835,7 +844,9 @@ class CBinjaBinDiff(diaphora.CBinDiff):
           function_hash_parts.append(curr_bytes)
 
         # Callees + names + constants
-        insn_callees, data_refs = self._extract_callees_and_refs(func, current_head)
+        insn_callees, data_refs, code_refs = self._extract_callees_and_refs(
+          func, current_head
+        )
         for ce in insn_callees:
           if ce not in callees:
             callees.append(ce)
@@ -847,13 +858,19 @@ class CBinjaBinDiff(diaphora.CBinDiff):
 
         mnems.append(mnem)
 
+        # Name lookup: IDA scans code refs first (call/branch targets) and
+        # falls back to data refs.  Walking only data refs misses every
+        # ``call <named_function>`` so the per-function ``names`` set ends up
+        # systematically incomplete.  Order matches IDA: code refs first so a
+        # data-ref name wins iff there is no code ref.
         tmp_name = None
         tmp_type = None
-        for dref in data_refs:
-          if dref in self.names:
-            tmp_name = self.names[dref]
+        name_refs = code_refs if code_refs else data_refs
+        for ref in name_refs:
+          if ref in self.names:
+            tmp_name = self.names[ref]
             try:
-              sym = self.bv.get_symbol_at(dref)
+              sym = self.bv.get_symbol_at(ref)
               if sym is not None:
                 tmp_type = str(sym.type)
             except Exception:
@@ -861,7 +878,8 @@ class CBinjaBinDiff(diaphora.CBinDiff):
             if tmp_name and not tmp_name.startswith("sub_") and not tmp_name.startswith("nullsub_"):
               names_set.add(tmp_name)
 
-          # String constants at data refs
+        # String constants live behind data refs only.
+        for dref in data_refs:
           try:
             sdata = self.bv.get_string_at(dref)
             if sdata is not None:
