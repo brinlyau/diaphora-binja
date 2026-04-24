@@ -62,8 +62,21 @@ def debug_refresh(message):
 
 
 # Route diaphora.py's logging through ours.
+#
+# When loaded as the BN plugin, `import diaphora` resolves to the package whose
+# __init__.py loads diaphora.py under the synthetic name `diaphora._engine` and
+# then copies its symbols into the package globals.  CBinDiff methods reference
+# `log` via their module's __globals__, which is `diaphora._engine.__dict__` --
+# not the package -- so assigning to `diaphora.log` alone has no effect on
+# logging emitted from inside the engine.  Override on the engine module too
+# whenever it is present.  In the headless path (binja_runner.py) `diaphora` is
+# the diaphora.py module itself, so the first assignment is what matters.
 diaphora.log = log
 diaphora.log_refresh = log_refresh
+_engine = sys.modules.get("diaphora._engine")
+if _engine is not None:
+  _engine.log = log
+  _engine.log_refresh = log_refresh
 
 
 # ------------------------------------------------------------------------------
