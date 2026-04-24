@@ -3,7 +3,8 @@
 Diaphora Binary Ninja headless runner.
 
 Usage:
-  python binja_runner.py <binary> [--db out.sqlite] [--diff other.sqlite]
+  python binja_runner.py <binary> [--db out.sqlite] \
+                                  [--diff other.sqlite [--diff-out results.sqlite]]
 
 Environment variables honored (mirrors diaphora_ida.py's `main()`):
   DIAPHORA_AUTO          - if set, runs in auto-export mode
@@ -54,12 +55,11 @@ def _run_export(binary_path, db_path):
   return bd
 
 
-def _run_diff(main_db, diff_db):
-  from diaphora_binja import CBinjaBinDiff, log
-  bd = CBinjaBinDiff(None, main_db)
-  log(f"Diffing {main_db} against {diff_db}")
-  bd.diff(diff_db)
-  return bd
+def _run_diff(main_db, diff_db, out_db):
+  from diaphora_binja import log, run_diff
+  log(f"Diffing {main_db} against {diff_db} -> {out_db}")
+  run_diff(main_db, diff_db, out_db)
+  return out_db
 
 
 def main():
@@ -78,13 +78,19 @@ def main():
   parser.add_argument("binary", help="Path to binary to analyse")
   parser.add_argument("--db", default=None, help="Output SQLite DB path")
   parser.add_argument("--diff", default=None, help="Optional second DB to diff against")
+  parser.add_argument(
+    "--diff-out",
+    default=None,
+    help="Where to write diff results (default: <db>.results.sqlite next to --db)",
+  )
   args = parser.parse_args()
 
   db_path = args.db or (os.path.splitext(os.path.basename(args.binary))[0] + ".diaphora.sqlite")
   _run_export(args.binary, db_path)
 
   if args.diff:
-    _run_diff(db_path, args.diff)
+    out_db = args.diff_out or (os.path.splitext(db_path)[0] + ".results.sqlite")
+    _run_diff(db_path, args.diff, out_db)
 
   return 0
 
