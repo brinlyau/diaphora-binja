@@ -244,9 +244,6 @@ class CBinjaBinDiff(diaphora.CBinDiff):
     self.pseudo_comments = {}
     self.microcode = {}
 
-    # Cache the mnemonic list so mnemonics_spp is deterministic for a given BV.
-    self._cpu_ins_list = None
-
     self.project_script = None
     self.hooks = None
 
@@ -371,23 +368,22 @@ class CBinjaBinDiff(diaphora.CBinDiff):
       return False
 
   # ----------------------------------------------------------------------------
-  def get_mnemonic_list(self):
-    """Build a stable sorted list of mnemonics for the current arch/bv."""
-    if self._cpu_ins_list is not None:
-      return self._cpu_ins_list
-    mnems = set()
-    try:
-      for func in self.bv.functions:
-        for bb in func.basic_blocks:
-          arch = self._arch_for(bb)
-          for addr in self._iter_instruction_addrs(bb):
-            mnem, _ = self._get_instruction_text(addr, arch=arch)
-            if mnem:
-              mnems.add(mnem)
-    except Exception:
-      pass
-    self._cpu_ins_list = sorted(mnems)
-    return self._cpu_ins_list
+  def _mnemonic_prime_index(self, mnem):
+    """Stable per-mnemonic prime index for ``mnemonics_spp``.
+
+    IDA pulls the full per-arch mnemonic list from ``GetInstructionList()`` so
+    every mnemonic gets the *same* index regardless of which binary is being
+    exported -- that's what makes ``mnemonics_spp`` comparable across DBs.
+    Binary Ninja has no equivalent "all instructions for this arch" API, so
+    the original port indexed into a list of mnemonics observed in *this*
+    binary; the index for ``mov`` then depended on whether the binary also
+    used ``xor``, breaking BN-vs-BN diffs.  Hash the mnemonic string instead:
+    deterministic, binary-independent, and fast.
+    """
+    if not mnem:
+      return 0
+    digest = md5(mnem.encode("utf-8", "replace")).digest()
+    return int.from_bytes(digest[:8], "big") % len(self.primes)
 
   # ----------------------------------------------------------------------------
   # MLIL-based "microcode" replacement.
@@ -773,7 +769,6 @@ class CBinjaBinDiff(diaphora.CBinDiff):
       indegree = 0
 
     mnemonics_spp = 1
-    cpu_ins_list = self.get_mnemonic_list()
 
     current_head = f
     try:
@@ -797,11 +792,8 @@ class CBinjaBinDiff(diaphora.CBinDiff):
         size += ilen
         instructions += 1
 
-        if mnem in cpu_ins_list:
-          try:
-            mnemonics_spp *= self.primes[cpu_ins_list.index(mnem)]
-          except Exception:
-            pass
+        if mnem:
+          mnemonics_spp *= self.primes[self._mnemonic_prime_index(mnem)]
 
         rel_head = current_head - image_base
         if block_ea in assembly:
