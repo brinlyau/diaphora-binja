@@ -1303,22 +1303,37 @@ class CBinjaBinDiff(diaphora.CBinDiff):
 
   # ----------------------------------------------------------------------------
   def export(self):
+    """Export the current BinaryView to the SQLite DB.
+
+    Returns True on a clean run, False if anything raised inside ``do_export``
+    (in which case the DB on disk is whatever the in-progress commit batches
+    persisted -- usually a *partial* export).  Callers MUST check the return
+    value before treating the DB as a complete corpus, especially before
+    diffing against it: an export+diff that ignores this signal will silently
+    diff against a truncated set of functions and produce match results that
+    look real but were computed from incomplete data.
+    """
     if self.project_script is not None:
       if not self.load_hooks():
         return False
+    ok = True
     try:
       self.do_export()
     except Exception:
+      ok = False
       log(f"Error: {sys.exc_info()[1]}")
+      log("Diaphora export failed mid-run; the DB on disk is partial.")
       traceback.print_exc()
-    self.db.commit()
-    cur = self.db_cursor()
     try:
-      cur.execute("analyze")
+      self.db.commit()
+      cur = self.db_cursor()
+      try:
+        cur.execute("analyze")
+      finally:
+        cur.close()
     finally:
-      cur.close()
-    self.db_close()
-    return True
+      self.db_close()
+    return ok
 
 
 def run_diff(db1, db2, out_db):
@@ -2221,7 +2236,12 @@ if HAS_BN:
           except Exception:
             pass
         bd = CBinjaBinDiff(self.bv, self.tmp_db)
-        bd.export()
+        if not bd.export():
+          # Diffing a partial export silently produces matches against a
+          # truncated corpus -- bail out instead and let _on_done see the
+          # missing results path.
+          log("Diaphora export step failed; skipping diff.")
+          return
         run_diff(self.tmp_db, self.other_db, self.out_db)
       except Exception:
         traceback.print_exc()

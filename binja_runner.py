@@ -51,7 +51,10 @@ def _run_export(binary_path, db_path):
   if use_decompiler is not None:
     bd.use_decompiler = bool(int(use_decompiler)) if use_decompiler.isdigit() else True
 
-  bd.export()
+  if not bd.export():
+    raise RuntimeError(
+      f"Diaphora export failed; partial DB left at {db_path!r}"
+    )
   return bd
 
 

@@ -140,8 +140,10 @@ def _export_current_bv(bv):
       _log(f"Could not remove existing DB {out_path!r}: {exc}")
       return
   bd = CBinjaBinDiff(bv, out_path)
-  bd.export()
-  _log(f"Diaphora export complete: {out_path}")
+  if bd.export():
+    _log(f"Diaphora export complete: {out_path}")
+  else:
+    _log(f"Diaphora export FAILED; partial DB at {out_path}")
 
 
 def _diff_against_db(bv):
