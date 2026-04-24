@@ -318,7 +318,15 @@ class CBinjaBinDiff(diaphora.CBinDiff):
       return b""
 
   def _extract_callers(self, func):
+    """Callers of @func -- both code refs (direct calls/jumps) and data refs.
+
+    Mirrors diaphora_ida.py's ``extract_function_callers``: a vtable entry or
+    callback registration that just stores the function's address is a
+    legitimate caller for callgraph-based matching, and IDA includes them via
+    ``DataRefsTo``.  Walking only code refs misses every indirect caller.
+    """
     callers = []
+    seen = set()
     try:
       for ref in self.bv.get_code_refs(func.start):
         try:
@@ -328,8 +336,21 @@ class CBinjaBinDiff(diaphora.CBinDiff):
         if caller_func is None:
           continue
         ea = int(caller_func.start)
-        if ea not in callers:
+        if ea not in seen:
+          seen.add(ea)
           callers.append(ea)
+    except Exception:
+      pass
+    try:
+      for dref in self.bv.get_data_refs(func.start):
+        try:
+          for cf in self.bv.get_functions_containing(int(dref)):
+            ea = int(cf.start)
+            if ea not in seen:
+              seen.add(ea)
+              callers.append(ea)
+        except Exception:
+          continue
     except Exception:
       pass
     return callers
