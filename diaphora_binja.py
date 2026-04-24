@@ -1128,14 +1128,35 @@ class CBinjaBinDiff(diaphora.CBinDiff):
     return props_list
 
   # ----------------------------------------------------------------------------
+  # Operation names whose ``.constant`` is a plain integer immediate, i.e. the
+  # BN equivalent of an IDA ``o_imm`` / ``o_displ`` operand value.  Pointer-typed
+  # constants are deliberately excluded -- see _walk_llil_for_constants below.
+  _IMMEDIATE_OP_NAMES = frozenset((
+    "LLIL_CONST", "MLIL_CONST", "HLIL_CONST",
+  ))
+
   def _walk_llil_for_constants(self, node, constants):
-    """Walk LLIL, pull out constant immediates that pass the filter."""
+    """Pull out integer immediate constants from an IL subtree.
+
+    Mirrors ``diaphora_ida.py``'s ``extract_function_constants``, which only
+    appends ``operand.value`` (immediates) and ``operand.addr`` (displacement
+    values) -- both plain integers.  String/function/global *pointer* targets
+    aren't added as raw addresses; instead IDA decodes the pointed-to string
+    via ``DataRefsFrom`` and appends the string itself.
+
+    The original BN port matched anything whose op name *contained* ``CONST``
+    (so ``LLIL_CONST_PTR``, ``LLIL_FLOAT_CONST``, ``LLIL_EXTERN_PTR``, ...).
+    That added the raw address of every string/function pointer alongside the
+    string content (which the data-ref branch in ``read_function`` already
+    captures), inflating the per-function constants list with noise that
+    doesn't appear in IDA exports and degrading constant-overlap matching.
+    """
     try:
       op = getattr(node, "operation", None)
       op_name = getattr(op, "name", "") if op is not None else ""
     except Exception:
       op_name = ""
-    if "CONST" in op_name:
+    if op_name in self._IMMEDIATE_OP_NAMES:
       try:
         val = int(getattr(node, "constant", 0))
         if _constant_filter(val) and val not in constants:
