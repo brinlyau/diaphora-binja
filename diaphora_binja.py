@@ -160,6 +160,25 @@ class CHLILAstVisitor:
 
 
 # ------------------------------------------------------------------------------
+def _func_no_return(func):
+  """True if Binary Ninja analysis says @func cannot return.
+
+  ``Function.can_return`` returns a ``BoolWithConfidence`` in modern BN, which
+  is never identical to the singleton ``False`` -- so ``can_return is False``
+  silently misses every no-return function.  Use truthiness instead, defaulting
+  to True (i.e. ``not no-return``) when the attribute is missing or raises.
+  """
+  try:
+    cr = getattr(func, "can_return", True)
+  except Exception:
+    return False
+  try:
+    return not bool(cr)
+  except Exception:
+    return False
+
+
+# ------------------------------------------------------------------------------
 def _constant_filter(value):
   """Identical heuristic to the IDA frontend."""
   try:
@@ -611,11 +630,8 @@ class CBinjaBinDiff(diaphora.CBinDiff):
       pass
 
     # Function-level flags (from BN symbol / analysis)
-    try:
-      if getattr(func, "can_return", True) is False:
-        h *= FEATURE_FUNC_NO_RET
-    except Exception:
-      pass
+    if _func_no_return(func):
+      h *= FEATURE_FUNC_NO_RET
     try:
       sym = func.symbol
       if sym is not None and sym.type == SymbolType.LibraryFunctionSymbol:
@@ -633,11 +649,8 @@ class CBinjaBinDiff(diaphora.CBinDiff):
   # ----------------------------------------------------------------------------
   def _function_flags(self, func):
     flags = 0
-    try:
-      if getattr(func, "can_return", True) is False:
-        flags |= FUNC_NORET
-    except Exception:
-      pass
+    if _func_no_return(func):
+      flags |= FUNC_NORET
     try:
       sym = func.symbol
       if sym is not None and sym.type == SymbolType.LibraryFunctionSymbol:
