@@ -922,7 +922,7 @@ class CBinjaBinDiff(diaphora.CBinDiff):
         assembly[block_ea] = [[rel_head, disasm]]
       else:
         assembly[block_ea] = [
-          [rel_head, "loc_%x:" % current_head],
+          [rel_head, f"loc_{current_head:x}:"],
           [rel_head, disasm],
         ]
 
@@ -1764,7 +1764,7 @@ def _parse_addr(val) -> Optional[int]:
 
 if HAS_QT:
 
-  class DiffResultsModel(QAbstractTableModel):
+  class CDiffResultsModel(QAbstractTableModel):
     MATCH_HEADERS = [
       "Line", "Address", "Name", "Address 2", "Name 2",
       "Ratio", "BBs 1", "BBs 2", "Description",
@@ -1996,14 +1996,14 @@ if HAS_QT:
   # Sidebar widget
   # -------------------------------------------------------------------------
 
-  class DiaphoraSidebarWidget(SidebarWidget):
+  class CDiaphoraSidebarWidget(SidebarWidget):
     def __init__(self, name: str = "Diaphora"):
       super().__init__(name)
       self._bv = None
       self._results_db: Optional[str] = None
       self._cfg: Dict[str, str] = {}
       self._tables: Dict[str, QTableView] = {}
-      self._models: Dict[str, DiffResultsModel] = {}
+      self._models: Dict[str, CDiffResultsModel] = {}
 
       root = QVBoxLayout(self)
       root.setContentsMargins(4, 4, 4, 4)
@@ -2064,7 +2064,7 @@ if HAS_QT:
       for i, (key, title) in enumerate(RESULT_CATEGORIES):
         rows = data.get(key, [])
         unmatched = key in ("primary", "secondary")
-        model = DiffResultsModel(rows, unmatched=unmatched)
+        model = CDiffResultsModel(rows, unmatched=unmatched)
         proxy = QSortFilterProxyModel()
         proxy.setSourceModel(model)
         view = self._tables[key]
@@ -2350,11 +2350,11 @@ if HAS_QT:
   # Sidebar type registration
   # -------------------------------------------------------------------------
 
-  _SIDEBAR_SINGLETON: Optional[DiaphoraSidebarWidget] = None
+  _SIDEBAR_SINGLETON: Optional[CDiaphoraSidebarWidget] = None
 
   if HAS_BNUI:
 
-    class DiaphoraSidebarWidgetType(SidebarWidgetType):
+    class CDiaphoraSidebarWidgetType(SidebarWidgetType):
       def __init__(self):
         # 24x24 placeholder icon - a simple "D"
         from PySide6.QtGui import QImage, QPainter
@@ -2372,7 +2372,7 @@ if HAS_QT:
 
       def createWidget(self, frame, data):  # noqa: N802
         global _SIDEBAR_SINGLETON
-        w = DiaphoraSidebarWidget("Diaphora")
+        w = CDiaphoraSidebarWidget("Diaphora")
         _SIDEBAR_SINGLETON = w
         try:
           if data is not None:
@@ -2400,7 +2400,7 @@ if HAS_QT:
 
 if HAS_BN:
 
-  class ExportTask(BackgroundTaskThread):
+  class CExportTask(BackgroundTaskThread):
     def __init__(self, bv, out_db: str, on_done=None):
       super().__init__("Diaphora: exporting BinaryView...", True)
       self.bv = bv
@@ -2426,7 +2426,7 @@ if HAS_BN:
         except Exception:
           traceback.print_exc()
 
-  class DiffTask(BackgroundTaskThread):
+  class CDiffTask(BackgroundTaskThread):
     def __init__(self, db1: str, db2: str, out_db: str, on_done=None):
       super().__init__("Diaphora: diffing databases...", True)
       self.db1 = db1
@@ -2447,7 +2447,7 @@ if HAS_BN:
         except Exception:
           traceback.print_exc()
 
-  class ExportAndDiffTask(BackgroundTaskThread):
+  class CExportAndDiffTask(BackgroundTaskThread):
     def __init__(self, bv, tmp_db: str, other_db: str, out_db: str, on_done=None):
       super().__init__("Diaphora: export + diff...", True)
       self.bv = bv
@@ -2495,7 +2495,7 @@ def register_sidebar():
   if _SIDEBAR_TYPE_REGISTERED or not HAS_BNUI or not HAS_QT:
     return
   try:
-    Sidebar.addSidebarWidgetType(DiaphoraSidebarWidgetType())
+    Sidebar.addSidebarWidgetType(CDiaphoraSidebarWidgetType())
     _SIDEBAR_TYPE_REGISTERED = True
   except Exception:
     traceback.print_exc()

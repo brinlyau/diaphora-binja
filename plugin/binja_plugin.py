@@ -125,10 +125,10 @@ def _export_current_bv(bv):
   if not out_path:
     return
 
-  if _ui_module is not None and hasattr(_ui_module, "ExportTask"):
+  if _ui_module is not None and hasattr(_ui_module, "CExportTask"):
     def _done(path):
       _log(f"Diaphora export complete: {path}")
-    task = _ui_module.ExportTask(bv, out_path, on_done=_done)
+    task = _ui_module.CExportTask(bv, out_path, on_done=_done)
     task.start()
     return
 
@@ -159,8 +159,8 @@ def _diff_against_db(bv):
     _log(f"Diaphora diff complete: {path}")
     _show_results_sidebar(bv, path)
 
-  if _ui_module is not None and hasattr(_ui_module, "DiffTask"):
-    task = _ui_module.DiffTask(db1, db2, out_db, on_done=_done)
+  if _ui_module is not None and hasattr(_ui_module, "CDiffTask"):
+    task = _ui_module.CDiffTask(db1, db2, out_db, on_done=_done)
     task.start()
   else:
     from diaphora_binja import run_diff
@@ -190,8 +190,8 @@ def _export_and_diff(bv):
     except Exception:
       pass
 
-  if _ui_module is not None and hasattr(_ui_module, "ExportAndDiffTask"):
-    task = _ui_module.ExportAndDiffTask(bv, tmp_path, other, out_db, on_done=_done)
+  if _ui_module is not None and hasattr(_ui_module, "CExportAndDiffTask"):
+    task = _ui_module.CExportAndDiffTask(bv, tmp_path, other, out_db, on_done=_done)
     task.start()
   else:
     from diaphora_binja import CBinjaBinDiff, run_diff
